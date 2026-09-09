@@ -1,0 +1,127 @@
+/* ============================================================
+   POS Warung Ayam Bakar — print.css
+   Untuk cetak nota di kertas 58mm atau 80mm
+   ============================================================ */
+
+@media print {
+    @page {
+        margin: 2mm;
+        size: 80mm auto;
+    }
+
+    body {
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        color: #000;
+        background: #fff;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Sembunyikan elemen yang tidak perlu di nota */
+    .sidebar,
+    .topbar,
+    .no-print,
+    .btn-print {
+        display: none !important;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+    }
+
+    /* Nota container */
+    .nota-container {
+        width: 100%;
+        max-width: 76mm;
+        margin: 0 auto;
+        padding: 4mm;
+    }
+
+    .nota-header {
+        text-align: center;
+        margin-bottom: 6px;
+        padding-bottom: 6px;
+        border-bottom: 1px dashed #000;
+    }
+
+    .nota-header h2 {
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 2px;
+    }
+
+    .nota-header p {
+        font-size: 10px;
+        margin: 0;
+    }
+
+    .nota-info {
+        margin-bottom: 6px;
+        padding-bottom: 6px;
+        border-bottom: 1px dashed #000;
+        font-size: 10px;
+    }
+
+    .nota-info table {
+        width: 100%;
+    }
+
+    .nota-info td {
+        padding: 1px 0;
+        font-size: 10px;
+        vertical-align: top;
+    }
+
+    .nota-items {
+        width: 100%;
+        margin-bottom: 6px;
+    }
+
+    .nota-items td {
+        padding: 2px 0;
+        font-size: 10px;
+        vertical-align: top;
+    }
+
+    .nota-items .item-name {
+        font-weight: bold;
+    }
+
+    .nota-items .item-detail {
+        padding-left: 8px;
+        color: #333;
+    }
+
+    .nota-totals {
+        border-top: 1px dashed #000;
+        padding-top: 6px;
+        margin-bottom: 6px;
+    }
+
+    .nota-totals table {
+        width: 100%;
+    }
+
+    .nota-totals td {
+        padding: 1px 0;
+        font-size: 11px;
+    }
+
+    .nota-totals .grand-total td {
+        font-size: 13px;
+        font-weight: bold;
+        padding-top: 4px;
+    }
+
+    .nota-footer {
+        text-align: center;
+        border-top: 1px dashed #000;
+        padding-top: 6px;
+        font-size: 10px;
+    }
+
+    .nota-footer p {
+        margin: 2px 0;
+    }
+}
