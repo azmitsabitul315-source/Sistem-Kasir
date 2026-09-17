@@ -57,25 +57,10 @@ class Kasir extends BaseController
     }
 
     /**
-     * Proses pembayaran — menerima POST dari form kasir
+     * Helper untuk memvalidasi dan menghitung order items dari data POST
      */
-    public function proses()
+    private function validateAndCalculateItems(array $items)
     {
-        $request = $this->request;
-
-        // Ambil data keranjang dari POST
-        $items      = $request->getPost('items');      // array of {menu_item_id, qty, note}
-        $amountPaid = $request->getPost('amount_paid'); // uang bayar
-
-        // Validasi: keranjang tidak boleh kosong
-        if (empty($items) || !is_array($items)) {
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Keranjang kosong.',
-            ]);
-        }
-
-        // Validasi dan hitung total server-side
         $orderItems = [];
         $subtotal   = 0;
 
@@ -84,27 +69,16 @@ class Kasir extends BaseController
             $qty    = (int) ($item['qty'] ?? 0);
             $note   = trim($item['note'] ?? '');
 
-            // Qty harus minimal 1
             if ($qty < 1) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'message' => 'Qty harus minimal 1.',
-                ]);
+                return ['error' => 'Qty harus minimal 1.'];
             }
 
-            // Cari menu dari database
             $menu = $this->menuItemModel->find($menuId);
             if (!$menu) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'message' => 'Menu tidak ditemukan: ID ' . $menuId,
-                ]);
+                return ['error' => 'Menu tidak ditemukan: ID ' . $menuId];
             }
             if ($menu['status'] !== 'aktif') {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'message' => 'Menu "' . $menu['name'] . '" tidak tersedia.',
-                ]);
+                return ['error' => 'Menu "' . $menu['name'] . '" tidak tersedia.'];
             }
 
             $price        = (float) $menu['price'];
@@ -113,31 +87,27 @@ class Kasir extends BaseController
 
             $orderItems[] = [
                 'menu_item_id' => $menuId,
-                'item_name'    => $menu['name'],       // snapshot
-                'price'        => $price,              // snapshot
+                'item_name'    => $menu['name'],
+                'price'        => $price,
                 'qty'          => $qty,
                 'note'         => $note,
                 'item_subtotal'=> $itemSubtotal,
             ];
         }
 
-        $discount = 0;
-        $total    = max(0, $subtotal - $discount);
+        return [
+            'orderItems' => $orderItems,
+            'subtotal'   => $subtotal,
+        ];
+    }
 
-        // Validasi pembayaran
-        $amountPaid = (float) $amountPaid;
-        if ($amountPaid < $total) {
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Uang bayar kurang. Total: Rp' . number_format($total, 0, ',', '.'),
-            ]);
-        }
-
-        $changeAmount = $amountPaid - $total;
-
-        // Generate nomor nota: INV-YYYYMMDD-XXXX
-        $today      = date('Ymd');
-        $lastOrder  = $this->orderModel
+    /**
+     * Generate Nomor Nota: INV-YYYYMMDD-XXXX
+     */
+    private function generateInvoiceNo()
+    {
+        $today     = date('Ymd');
+        $lastOrder = $this->orderModel
             ->like('invoice_no', 'INV-' . $today, 'after')
             ->orderBy('id', 'DESC')
             ->first();
@@ -147,13 +117,304 @@ class Kasir extends BaseController
             $parts    = explode('-', $lastOrder['invoice_no']);
             $sequence = (int) end($parts) + 1;
         }
-        $invoiceNo = 'INV-' . $today . '-' . str_pad($sequence, 4, '0', STR_PAD_LEFT);
 
-        // Simpan dengan DB transaction
+        return 'INV-' . $today . '-' . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Simpan Pesanan (Draft Bill / Pending Status)
+     * Pesan Dulu -> Simpan ke Antrian Bill Aktif
+     */
+    public function simpanPesanan()
+    {
+        $request = $this->request;
+        $orderId = (int) $request->getPost('order_id');
+        $items   = $request->getPost('items');
+
+        if (empty($items) || !is_array($items)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Keranjang pesanan kosong.',
+            ]);
+        }
+
+        $calculated = $this->validateAndCalculateItems($items);
+        if (isset($calculated['error'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => $calculated['error'],
+            ]);
+        }
+
+        $orderItems = $calculated['orderItems'];
+        $subtotal   = $calculated['subtotal'];
+        $discount   = 0;
+        $total      = max(0, $subtotal - $discount);
+
         $db = \Config\Database::connect();
         $db->transStart();
 
-        $orderId = $this->orderModel->insert([
+        if ($orderId > 0) {
+            // Update pesanan pending yang sudah ada
+            $existing = $this->orderModel->find($orderId);
+            if (!$existing || $existing['status'] !== 'pending') {
+                $db->transRollback();
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Pesanan tidak ditemukan atau sudah selesai.',
+                ]);
+            }
+
+            $invoiceNo = $existing['invoice_no'];
+            $this->orderModel->update($orderId, [
+                'subtotal' => $subtotal,
+                'discount' => $discount,
+                'total'    => $total,
+            ]);
+
+            // Hapus items lama, ganti dengan baru
+            $this->orderItemModel->where('order_id', $orderId)->delete();
+        } else {
+            // Buat pesanan pending baru
+            $invoiceNo = $this->generateInvoiceNo();
+            $orderId   = $this->orderModel->insert([
+                'invoice_no'     => $invoiceNo,
+                'subtotal'       => $subtotal,
+                'discount'       => $discount,
+                'total'          => $total,
+                'payment_method' => 'tunai',
+                'amount_paid'    => 0,
+                'change_amount'  => 0,
+                'status'         => 'pending',
+            ]);
+        }
+
+        foreach ($orderItems as &$oi) {
+            $oi['order_id'] = $orderId;
+        }
+        $this->orderItemModel->insertBatch($orderItems);
+
+        $db->transComplete();
+
+        if ($db->transStatus() === false) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Gagal menyimpan pesanan.',
+            ]);
+        }
+
+        return $this->response->setJSON([
+            'success'    => true,
+            'message'    => 'Pesanan berhasil disimpan ke Bill Aktif!',
+            'order_id'   => $orderId,
+            'invoice_no' => $invoiceNo,
+            'total'      => $total,
+        ]);
+    }
+
+    /**
+     * Ambil semua daftar pesanan pending (Bill Aktif)
+     */
+    public function getPendingOrders()
+    {
+        $orders = $this->orderModel
+            ->where('status', 'pending')
+            ->orderBy('created_at', 'DESC')
+            ->findAll();
+
+        foreach ($orders as &$order) {
+            $items = $this->orderItemModel->where('order_id', $order['id'])->findAll();
+            $order['items']      = $items;
+            $order['item_count'] = count($items);
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'orders'  => $orders,
+        ]);
+    }
+
+    /**
+     * Ambil detail 1 pesanan (untuk edit / preview)
+     */
+    public function getOrderDetail($id)
+    {
+        $order = $this->orderModel->find($id);
+        if (!$order) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Pesanan tidak ditemukan.',
+            ]);
+        }
+
+        $items = $this->orderItemModel->where('order_id', $id)->findAll();
+
+        return $this->response->setJSON([
+            'success' => true,
+            'order'   => $order,
+            'items'   => $items,
+        ]);
+    }
+
+    /**
+     * Batalkan pesanan pending
+     */
+    public function batalPesanan($id)
+    {
+        $order = $this->orderModel->find($id);
+        if (!$order) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Pesanan tidak ditemukan.',
+            ]);
+        }
+
+        if ($order['status'] !== 'pending') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Hanya pesanan pending yang dapat dibatalkan dari antrian.',
+            ]);
+        }
+
+        $this->orderModel->update($id, [
+            'status'      => 'void',
+            'void_reason' => 'Dibatalkan dari antrian pesanan.',
+        ]);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'message' => 'Pesanan ' . $order['invoice_no'] . ' berhasil dibatalkan.',
+        ]);
+    }
+
+    /**
+     * Proses pembayaran (Langsung atau Bayar Bill Pending)
+     */
+    public function proses()
+    {
+        $request    = $this->request;
+        $orderId    = (int) $request->getPost('order_id');
+        $items      = $request->getPost('items');
+        $amountPaid = (float) $request->getPost('amount_paid');
+
+        // Skenario 1: Bayar pesanan pending yang sudah ada
+        if ($orderId > 0) {
+            $existing = $this->orderModel->find($orderId);
+            if (!$existing) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Pesanan tidak ditemukan.',
+                ]);
+            }
+            if ($existing['status'] !== 'pending') {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Pesanan sudah lunas / di-void.',
+                ]);
+            }
+
+            // Jika ada perubahan items saat bayar, update items dulu
+            $db = \Config\Database::connect();
+            $db->transStart();
+
+            if (!empty($items) && is_array($items)) {
+                $calculated = $this->validateAndCalculateItems($items);
+                if (isset($calculated['error'])) {
+                    $db->transRollback();
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => $calculated['error'],
+                    ]);
+                }
+
+                $orderItems = $calculated['orderItems'];
+                $subtotal   = $calculated['subtotal'];
+                $discount   = 0;
+                $total      = max(0, $subtotal - $discount);
+
+                $this->orderItemModel->where('order_id', $orderId)->delete();
+                foreach ($orderItems as &$oi) {
+                    $oi['order_id'] = $orderId;
+                }
+                $this->orderItemModel->insertBatch($orderItems);
+            } else {
+                $total = (float) $existing['total'];
+            }
+
+            if ($amountPaid < $total) {
+                $db->transRollback();
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Uang bayar kurang. Total: Rp' . number_format($total, 0, ',', '.'),
+                ]);
+            }
+
+            $changeAmount = $amountPaid - $total;
+
+            $this->orderModel->update($orderId, [
+                'subtotal'       => isset($subtotal) ? $subtotal : $existing['subtotal'],
+                'total'          => $total,
+                'amount_paid'    => $amountPaid,
+                'change_amount'  => $changeAmount,
+                'payment_method' => 'tunai',
+                'status'         => 'selesai',
+            ]);
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Gagal memproses pembayaran.',
+                ]);
+            }
+
+            return $this->response->setJSON([
+                'success'    => true,
+                'message'    => 'Pembayaran berhasil!',
+                'invoice_no' => $existing['invoice_no'],
+                'total'      => $total,
+                'amount_paid'=> $amountPaid,
+                'change'     => $changeAmount,
+                'order_id'   => $orderId,
+            ]);
+        }
+
+        // Skenario 2: Bayar langsung (langsung checkout baru)
+        if (empty($items) || !is_array($items)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Keranjang kosong.',
+            ]);
+        }
+
+        $calculated = $this->validateAndCalculateItems($items);
+        if (isset($calculated['error'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => $calculated['error'],
+            ]);
+        }
+
+        $orderItems = $calculated['orderItems'];
+        $subtotal   = $calculated['subtotal'];
+        $discount   = 0;
+        $total      = max(0, $subtotal - $discount);
+
+        if ($amountPaid < $total) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Uang bayar kurang. Total: Rp' . number_format($total, 0, ',', '.'),
+            ]);
+        }
+
+        $changeAmount = $amountPaid - $total;
+        $invoiceNo    = $this->generateInvoiceNo();
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        $newOrderId = $this->orderModel->insert([
             'invoice_no'     => $invoiceNo,
             'subtotal'       => $subtotal,
             'discount'       => $discount,
@@ -165,7 +426,7 @@ class Kasir extends BaseController
         ]);
 
         foreach ($orderItems as &$oi) {
-            $oi['order_id'] = $orderId;
+            $oi['order_id'] = $newOrderId;
         }
         $this->orderItemModel->insertBatch($orderItems);
 
@@ -185,7 +446,7 @@ class Kasir extends BaseController
             'total'      => $total,
             'amount_paid'=> $amountPaid,
             'change'     => $changeAmount,
-            'order_id'   => $orderId,
+            'order_id'   => $newOrderId,
         ]);
     }
 }

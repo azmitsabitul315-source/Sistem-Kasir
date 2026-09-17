@@ -3,7 +3,7 @@
 <div class="filter-bar">
     <form method="get" action="<?= base_url('laporan/bulanan') ?>" style="display:flex;gap:12px;align-items:center;">
         <label style="font-size:0.85rem;font-weight:600;">Bulan:</label>
-        <select name="bulan" class="form-control" style="width:auto;">
+        <select name="bulan" class="form-control" style="width:auto;" onchange="this.form.submit()">
             <?php for ($m = 1; $m <= 12; $m++): ?>
                 <option value="<?= $m ?>" <?= $bulan == $m ? 'selected' : '' ?>>
                     <?= DateTime::createFromFormat('!m', $m)->format('F') ?>
@@ -11,12 +11,11 @@
             <?php endfor; ?>
         </select>
         <label style="font-size:0.85rem;font-weight:600;">Tahun:</label>
-        <select name="tahun" class="form-control" style="width:auto;">
+        <select name="tahun" class="form-control" style="width:auto;" onchange="this.form.submit()">
             <?php for ($y = date('Y'); $y >= date('Y') - 3; $y--): ?>
                 <option value="<?= $y ?>" <?= $tahun == $y ? 'selected' : '' ?>><?= $y ?></option>
             <?php endfor; ?>
         </select>
-        <button type="submit" class="btn btn-primary" style="padding:8px 16px;">Lihat</button>
     </form>
     <a href="<?= base_url('laporan/harian') ?>" class="btn btn-secondary" style="padding:8px 16px;">📊 Laporan Harian</a>
 </div>

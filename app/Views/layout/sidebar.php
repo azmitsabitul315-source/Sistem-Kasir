@@ -12,6 +12,12 @@
             </a>
         </li>
         <li>
+            <a href="<?= base_url('pending') ?>" class="<?= (str_starts_with(uri_string(), 'pending')) ? 'active' : '' ?>">
+                <span class="nav-icon">⏳</span>
+                <span>Pesanan Pending</span>
+            </a>
+        </li>
+        <li>
             <a href="<?= base_url('histori') ?>" class="<?= (str_starts_with(uri_string(), 'histori')) ? 'active' : '' ?>">
                 <span class="nav-icon">📋</span>
                 <span>Histori Pesanan</span>

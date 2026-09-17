@@ -4,8 +4,7 @@
     <form method="get" action="<?= base_url('histori') ?>" style="display:flex;gap:12px;align-items:center;">
         <label for="tanggal" style="font-size:0.85rem;font-weight:600;">Tanggal:</label>
         <input type="date" name="tanggal" id="tanggal" class="form-control" style="width:auto;"
-               value="<?= esc($tanggal) ?>">
-        <button type="submit" class="btn btn-primary" style="padding:8px 16px;">Filter</button>
+               value="<?= esc($tanggal) ?>" onchange="this.form.submit()">
     </form>
 </div>
 
@@ -33,6 +32,8 @@
                             <td>
                                 <?php if ($order['status'] === 'selesai'): ?>
                                     <span class="badge badge-success">Selesai</span>
+                                <?php elseif ($order['status'] === 'pending'): ?>
+                                    <span class="badge badge-warning" style="background:#f39c12;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.75rem;">Pending</span>
                                 <?php else: ?>
                                     <span class="badge badge-danger">Void</span>
                                 <?php endif; ?>

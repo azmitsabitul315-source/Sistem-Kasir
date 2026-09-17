@@ -24,6 +24,7 @@ class Histori extends BaseController
         $tanggal = $this->request->getGet('tanggal') ?? date('Y-m-d');
 
         $orders = $this->orderModel
+            ->where('status !=', 'pending')
             ->where('DATE(created_at)', $tanggal)
             ->orderBy('created_at', 'DESC')
             ->findAll();

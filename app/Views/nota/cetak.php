@@ -125,7 +125,9 @@
     <!-- Footer -->
     <div class="nota-footer">
         <p><?= esc($settings['info_nota'] ?? 'Terima kasih atas kunjungan Anda') ?></p>
-        <?php if ($order['status'] === 'void'): ?>
+        <?php if ($order['status'] === 'pending'): ?>
+            <p style="font-weight:bold;color:#e67e22;border:1px dashed #e67e22;padding:4px;margin-top:6px;">*** STRUK SEMENTARA / DAPUR ***<br><span style="font-size:10px;">(BELUM LUNAS)</span></p>
+        <?php elseif ($order['status'] === 'void'): ?>
             <p style="font-weight:bold;color:red;">*** VOID ***</p>
         <?php endif; ?>
     </div>

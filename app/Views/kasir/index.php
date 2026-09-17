@@ -42,9 +42,21 @@
 
     <!-- Kolom Kanan: Keranjang -->
     <div class="cart-section">
-        <div class="cart-header">
-            🛒 Keranjang <span id="cart-count" style="margin-left:auto;background:rgba(255,255,255,0.2);padding:2px 10px;border-radius:12px;font-size:0.8rem;">0</span>
+        <div class="cart-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span>🛒 Keranjang</span>
+                <span id="cart-count" style="background:rgba(255,255,255,0.2);padding:2px 10px;border-radius:12px;font-size:0.8rem;">0</span>
+            </div>
+            <button class="btn-bill-aktif" onclick="openPendingOrdersModal()" style="background:#f39c12;color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:4px;">
+                📋 Bill Aktif <span id="pending-count-badge" class="badge bg-danger" style="background:#c0392b;padding:2px 6px;border-radius:10px;font-size:0.75rem;">0</span>
+            </button>
         </div>
+
+        <div id="editing-indicator" style="display:none;background:#fff3cd;color:#856404;padding:8px 12px;font-size:0.85rem;font-weight:600;border-bottom:1px solid #ffeeba;">
+            ✏️ Mengedit Bill: <span id="editing-invoice-no"></span>
+            <button onclick="cancelEditing()" style="float:right;background:none;border:none;color:#856404;font-weight:bold;cursor:pointer;">&times; Batal Edit</button>
+        </div>
+
         <div class="cart-items" id="cart-items">
             <div class="cart-empty" id="cart-empty">
                 Belum ada pesanan.<br>Klik menu untuk menambahkan.
@@ -55,9 +67,32 @@
                 <span>Total</span>
                 <span class="total-amount" id="cart-total">Rp0</span>
             </div>
-            <button class="btn-bayar" id="btn-bayar" onclick="openPayment()" disabled>
-                💰 BAYAR
-            </button>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+                <button class="btn-simpan-pesanan" id="btn-simpan" onclick="simpanPesananPending()" disabled style="background:#e67e22;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:700;font-size:0.9rem;">
+                    📌 Simpan Pesanan
+                </button>
+                <button class="btn-bayar" id="btn-bayar" onclick="openPayment()" disabled style="padding:12px;border-radius:8px;font-weight:700;font-size:0.9rem;">
+                    💰 Bayar Langsung
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Bill Aktif / Antrian Pesanan -->
+<div class="modal-overlay" id="modal-pending-orders">
+    <div class="modal" style="max-width:650px;width:95%;">
+        <div class="modal-header" style="background:var(--accent);color:#fff;">
+            <h3>📋 Bill Aktif (Pesanan Belum Lunas)</h3>
+            <button class="modal-close" onclick="closePendingOrdersModal()" style="color:#fff;">&times;</button>
+        </div>
+        <div class="modal-body" style="max-height:70vh;overflow-y:auto;padding:16px;">
+            <div id="pending-orders-list">
+                <div class="text-center text-muted py-4">Memuat bill aktif...</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closePendingOrdersModal()">Tutup</button>
         </div>
     </div>
 </div>
@@ -70,6 +105,9 @@
             <button class="modal-close" onclick="closePayment()">&times;</button>
         </div>
         <div class="modal-body">
+            <div id="pay-invoice-info" style="display:none;background:#f8f9fa;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:0.9rem;font-weight:600;color:var(--text-dark);">
+                Bill: <span id="pay-invoice-no"></span>
+            </div>
             <div class="payment-row total">
                 <span>Total</span>
                 <span id="pay-total">Rp0</span>

@@ -4,8 +4,7 @@
     <form method="get" action="<?= base_url('laporan/harian') ?>" style="display:flex;gap:12px;align-items:center;">
         <label for="tanggal" style="font-size:0.85rem;font-weight:600;">Tanggal:</label>
         <input type="date" name="tanggal" id="tanggal" class="form-control" style="width:auto;"
-               value="<?= esc($tanggal) ?>">
-        <button type="submit" class="btn btn-primary" style="padding:8px 16px;">Lihat</button>
+               value="<?= esc($tanggal) ?>" onchange="this.form.submit()">
     </form>
     <a href="<?= base_url('laporan/bulanan') ?>" class="btn btn-secondary" style="padding:8px 16px;">📅 Laporan Bulanan</a>
 </div>

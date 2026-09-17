@@ -10,6 +10,13 @@ $routes->get('/', 'Kasir::index');
 // Kasir
 $routes->get('kasir', 'Kasir::index');
 $routes->post('kasir/proses', 'Kasir::proses');
+$routes->post('kasir/simpan', 'Kasir::simpanPesanan');
+$routes->get('kasir/pending', 'Kasir::getPendingOrders');
+$routes->get('kasir/detail/(:num)', 'Kasir::getOrderDetail/$1');
+$routes->post('kasir/batal/(:num)', 'Kasir::batalPesanan/$1');
+
+// Pesanan Pending
+$routes->get('pending', 'Pending::index');
 
 // Menu (CRUD)
 $routes->get('menu', 'Menu::index');
